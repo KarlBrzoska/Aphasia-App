@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'continuous_listener.dart';
 
 void main() => runApp(const AphasiaApp());
 
@@ -105,6 +106,84 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  ContinuousListener? _listener;
+  bool _listenerReady = false;
+
+  Map<String, dynamic> _profileJson() {
+    final p = AppState.of(context).profile;
+    return {
+      "name": p.name,
+      "preferred_language": p.preferredLanguage,
+      "communication_style": p.communicationStyle,
+      "prefers_icons": p.prefersIcons,
+      "needs_slow_speech": p.needsSlowSpeech,
+      "sensitivities": {"noise": p.sensitiveToNoise, "light": p.sensitiveToLight},
+      "caregiver": {"name": p.caregiverName, "phone": p.caregiverPhone},
+      "personalization": {
+        "favorite_foods": p.favoriteFoods,
+        "interests": p.interests,
+        "routine_times": p.routineTimes,
+        "custom_notes": p.customNotes
+      }
+    };
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_listenerReady) return;
+    _listenerReady = true;
+
+    _listener = ContinuousListener(
+      stt: FakeStt(),                    // swap later for real STT
+      suggester: FakeSuggestionEngine(), // swap later for your LLM/ranker
+      patientProfile: _profileJson(),
+      onSuggestions: ({required String transcript, required List<String> options}) {
+        if (!mounted) return;
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.grey[900],
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (ctx) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Heard: $transcript',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  for (final opt in options)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Confirm to speak: "$opt"')),
+                          );
+                          // TODO: add TTS + learning hook here
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: Text(
+                            opt,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = AppState.of(context);
@@ -134,10 +213,28 @@ class _HomeScreenState extends State<HomeScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18)),
                   ),
-                  onPressed: () {
-                    setState(() => app.listeningOn = !app.listeningOn);
+                  onPressed: () async {
+                    final turnOn = !app.listeningOn;
+
+                    if (turnOn) {
+                      final ok = await _listener?.start() ?? false;
+                      if (!ok) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Mic permission needed or unavailable'),
+                          ),
+                        );
+                        return;
+                      }
+                    } else {
+                      await _listener?.stop();
+                    }
+
+                    setState(() => app.listeningOn = turnOn);
                     final status =
                         app.listeningOn ? "Listening ON" : "Listening OFF";
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context)
                         .showSnackBar(SnackBar(content: Text(status)));
                   },
@@ -155,10 +252,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 _InfoCard(
                   title: "What happens here?",
                   child: const Text(
-                    "This is a UI demo. The big button toggles a 'Listening' state. "
-                    "Later, when you add your local LLM + on-device audio logic, "
-                    "this state will control whether the app is passively listening "
-                    "and using profile data to personalize suggestions.",
+                    "When Listening is ON, the app streams the mic, splits speech into "
+                    "short chunks, sends them to a stub STT + suggestion engine, and "
+                    "shows 2–3 options. Raw audio is discarded immediately. "
+                    "Swap the stubs for real STT/LLM later.",
                   ),
                 ),
               ],
@@ -169,6 +266,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+
 
 class _ListeningStatusPill extends StatelessWidget {
   const _ListeningStatusPill({required this.on});
