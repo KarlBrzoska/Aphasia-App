@@ -28,6 +28,9 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app uses the microphone to help the patient communicate.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This app uses on-device speech recognition to help the patient communicate.</string>
+
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

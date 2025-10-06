@@ -128,61 +128,119 @@ class _HomeScreenState extends State<HomeScreen> {
     };
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_listenerReady) return;
-    _listenerReady = true;
+ @override
+void didChangeDependencies() {
+  super.didChangeDependencies();
+  if (_listenerReady) return;
+  _listenerReady = true;
 
-    _listener = ContinuousListener(
-      stt: FakeStt(),                    // swap later for real STT
-      suggester: FakeSuggestionEngine(), // swap later for your LLM/ranker
-      patientProfile: _profileJson(),
-      onSuggestions: ({required String transcript, required List<String> options}) {
-        if (!mounted) return;
-        showModalBottomSheet(
-          context: context,
-          backgroundColor: Colors.grey[900],
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (ctx) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Heard: $transcript',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 12),
-                  for (final opt in options)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Confirm to speak: "$opt"')),
-                          );
-                          // TODO: add TTS + learning hook here
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Text(
-                            opt,
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                        ),
+  // Read your key from --dart-define (see note below)
+  const openAiKey = String.fromEnvironment('OPENAI_API_KEY');
+
+_listener = ContinuousListener(
+  suggester: FakeSuggestionEngine(),
+  patientProfile: _profileJson(),
+  onSuggestions: ({required String transcript, required List<String> options}) {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Heard: $transcript',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              for (final opt in options)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Confirm to speak: "$opt"')),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Text(
+                        opt,
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                     ),
-                ],
-              ),
-            );
-          },
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
-  }
+  },
+);
+}
+
+
+//USING WHISPER
+//   _listener = ContinuousListener(
+//     stt: WhisperStt(
+//       apiKey: "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",     // <-- real Whisper STT
+//       model: 'whisper-1',    // or 'gpt-4o-mini-transcribe' if enabled
+//       language: 'en',        // optional
+//     ),
+//     suggester: FakeSuggestionEngine(), // keep your stub suggester for now
+//     patientProfile: _profileJson(),
+//     onSuggestions: ({required String transcript, required List<String> options}) {
+//       if (!mounted) return;
+//       showModalBottomSheet(
+//         context: context,
+//         backgroundColor: Colors.grey[900],
+//         shape: const RoundedRectangleBorder(
+//           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+//         ),
+//         builder: (ctx) {
+//           return Padding(
+//             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+//             child: Column(
+//               mainAxisSize: MainAxisSize.min,
+//               children: [
+//                 Text('Heard: $transcript',
+//                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+//                 const SizedBox(height: 12),
+//                 for (final opt in options)
+//                   Padding(
+//                     padding: const EdgeInsets.only(bottom: 8),
+//                     child: ElevatedButton(
+//                       onPressed: () {
+//                         Navigator.pop(ctx);
+//                         ScaffoldMessenger.of(context).showSnackBar(
+//                           SnackBar(content: Text('Confirm to speak: "$opt"')),
+//                         );
+//                         // TODO: add TTS + learning hook here
+//                       },
+//                       child: Padding(
+//                         padding: const EdgeInsets.symmetric(vertical: 14),
+//                         child: Text(
+//                           opt,
+//                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+//                         ),
+//                       ),
+//                     ),
+//                   ),
+//               ],
+//             ),
+//           );
+//         },
+//       );
+//     },
+//   );
+// }
+
 
   @override
   Widget build(BuildContext context) {
