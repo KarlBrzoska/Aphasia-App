@@ -187,9 +187,9 @@ _listener = ContinuousListener(
 //USING WHISPER
 //   _listener = ContinuousListener(
 //     stt: WhisperStt(
-//       apiKey: "openaikey",     // <-- real Whisper STT
-//       model: 'whisper-1',    // or 'gpt-4o-mini-transcribe' if enabled
-//       language: 'en',        // optional
+//       apiKey: "",     // <-- real Whisper STT
+//       model: '',    // or 'gpt-4o-mini-transcribe' if enabled
+//       language: '',        // optional
 //     ),
 //     suggester: FakeSuggestionEngine(), // keep your stub suggester for now
 //     patientProfile: _profileJson(),
