@@ -184,60 +184,6 @@ _listener = ContinuousListener(
 }
 
 
-//USING WHISPER
-//   _listener = ContinuousListener(
-//     stt: WhisperStt(
-//       apiKey: "",     // <-- real Whisper STT
-//       model: '',    // or 'gpt-4o-mini-transcribe' if enabled
-//       language: '',        // optional
-//     ),
-//     suggester: FakeSuggestionEngine(), // keep your stub suggester for now
-//     patientProfile: _profileJson(),
-//     onSuggestions: ({required String transcript, required List<String> options}) {
-//       if (!mounted) return;
-//       showModalBottomSheet(
-//         context: context,
-//         backgroundColor: Colors.grey[900],
-//         shape: const RoundedRectangleBorder(
-//           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-//         ),
-//         builder: (ctx) {
-//           return Padding(
-//             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-//             child: Column(
-//               mainAxisSize: MainAxisSize.min,
-//               children: [
-//                 Text('Heard: $transcript',
-//                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-//                 const SizedBox(height: 12),
-//                 for (final opt in options)
-//                   Padding(
-//                     padding: const EdgeInsets.only(bottom: 8),
-//                     child: ElevatedButton(
-//                       onPressed: () {
-//                         Navigator.pop(ctx);
-//                         ScaffoldMessenger.of(context).showSnackBar(
-//                           SnackBar(content: Text('Confirm to speak: "$opt"')),
-//                         );
-//                         // TODO: add TTS + learning hook here
-//                       },
-//                       child: Padding(
-//                         padding: const EdgeInsets.symmetric(vertical: 14),
-//                         child: Text(
-//                           opt,
-//                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-//                         ),
-//                       ),
-//                     ),
-//                   ),
-//               ],
-//             ),
-//           );
-//         },
-//       );
-//     },
-//   );
-// }
 
 
   @override
