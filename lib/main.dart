@@ -134,8 +134,6 @@ void didChangeDependencies() {
   if (_listenerReady) return;
   _listenerReady = true;
 
-  // Read your key from --dart-define (see note below)
-  const openAiKey = String.fromEnvironment('OPENAI_API_KEY');
 
 _listener = ContinuousListener(
   suggester: FakeSuggestionEngine(),
