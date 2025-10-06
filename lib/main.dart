@@ -187,7 +187,7 @@ _listener = ContinuousListener(
 //USING WHISPER
 //   _listener = ContinuousListener(
 //     stt: WhisperStt(
-//       apiKey: "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",     // <-- real Whisper STT
+//       apiKey: "openaikey",     // <-- real Whisper STT
 //       model: 'whisper-1',    // or 'gpt-4o-mini-transcribe' if enabled
 //       language: 'en',        // optional
 //     ),
