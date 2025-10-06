@@ -3,6 +3,11 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:record/record.dart';
 
+/* --------------------------------------------------------------------------
+ *  STEP 1  —  Real mic listener + simple fake STT + fake suggestions
+ * -------------------------------------------------------------------------- */
+
+/// ---------- Interfaces ----------
 abstract class SttEngine {
   Future<String> transcribeBytes(Uint8List wavPcm16, {int sampleRate = 16000});
 }
@@ -15,13 +20,20 @@ abstract class SuggestionEngine {
   });
 }
 
-// --- Stubs ---
+/// ---------- Fake engines (demo only) ----------
 class FakeStt implements SttEngine {
   int _i = 0;
-  final _alts = ['headache', 'water please', 'bathroom', 'i feel dizzy', 'call my caregiver'];
+  final _alts = [
+    'water please',
+    'help me',
+    'bathroom',
+    'call caregiver',
+    'I feel dizzy'
+  ];
+
   @override
   Future<String> transcribeBytes(Uint8List _, {int sampleRate = 16000}) async {
-    await Future.delayed(const Duration(milliseconds: 120));
+    await Future.delayed(const Duration(milliseconds: 200));
     _i = (_i + 1) % _alts.length;
     return _alts[_i];
   }
@@ -34,31 +46,32 @@ class FakeSuggestionEngine implements SuggestionEngine {
     required Map<String, dynamic> patientProfile,
     required List<String> recentWords,
   }) async {
-    final likes = (patientProfile['personalization']?['interests'] ?? '').toString().toLowerCase();
+    final lower = transcript.toLowerCase();
     final guesses = <String>[];
-    if (transcript.contains('head')) guesses.add('Headache');
-    if (transcript.contains('dizz')) guesses.add('I’m dizzy');
-    if (likes.contains('coffee')) guesses.add('Coffee please');
-    if (likes.contains('music')) guesses.add('Play music');
-    if (guesses.isEmpty) guesses.addAll(['I need help', 'Water please']);
-    final out = <String>{transcript, ...guesses}.where((s) => s.trim().isNotEmpty).toList();
-    return out.take(3).toList();
+
+    if (lower.contains('water')) guesses.add('Water please');
+    if (lower.contains('help')) guesses.add('I need help');
+    if (lower.contains('bath')) guesses.add('I need the bathroom');
+    if (guesses.isEmpty) guesses.addAll(['Yes', 'No', 'Please repeat']);
+
+    return guesses.take(3).toList();
   }
 }
 
-// --- Tuned VAD ---
+/// ---------- Simple Voice Activity Detector ----------
 class SimpleVadSegmenter {
   SimpleVadSegmenter({
     this.sampleRate = 16000,
     this.frameMs = 20,
-    this.silenceHangMs = 400, // shorter hang
-    this.minSegMs = 200,      // shorter minimum
+    this.silenceHangMs = 400,
+    this.minSegMs = 200,
     this.maxSegMs = 8000,
-    this.rmsThreshold = 0.005, // more sensitive
+    this.rmsThreshold = 0.006,
   });
 
   final int sampleRate, frameMs, silenceHangMs, minSegMs, maxSegMs;
   final double rmsThreshold;
+
   final List<int> _buf = [];
   bool _inSpeech = false;
   int _segStartMs = 0, _lastSpeechMs = 0, _elapsedMs = 0;
@@ -66,32 +79,30 @@ class SimpleVadSegmenter {
   Uint8List? pushFrame(Int16List pcm16) {
     _elapsedMs += frameMs;
     final rms = _rms(pcm16);
-    final nowMs = _elapsedMs;
+    final now = _elapsedMs;
 
     if (rms > rmsThreshold) {
       if (!_inSpeech) {
         _inSpeech = true;
-        _segStartMs = nowMs;
+        _segStartMs = now;
         _buf.clear();
       }
-      _lastSpeechMs = nowMs;
+      _lastSpeechMs = now;
       _buf.addAll(pcm16);
-      if (nowMs - _segStartMs >= maxSegMs) return _flush();
+      if (now - _segStartMs >= maxSegMs) return _flush();
       return null;
-    } else {
-      if (_inSpeech) {
-        if (nowMs - _lastSpeechMs < silenceHangMs) {
-          _buf.addAll(pcm16);
-          if (nowMs - _segStartMs >= maxSegMs) return _flush();
-          return null;
-        } else {
-          if (nowMs - _segStartMs >= minSegMs) return _flush();
-          _inSpeech = false;
-          _buf.clear();
-        }
+    } else if (_inSpeech) {
+      if (now - _lastSpeechMs < silenceHangMs) {
+        _buf.addAll(pcm16);
+        if (now - _segStartMs >= maxSegMs) return _flush();
+        return null;
+      } else {
+        if (now - _segStartMs >= minSegMs) return _flush();
+        _inSpeech = false;
+        _buf.clear();
       }
-      return null;
     }
+    return null;
   }
 
   Uint8List _flush() {
@@ -104,7 +115,7 @@ class SimpleVadSegmenter {
   double _rms(Int16List s) {
     if (s.isEmpty) return 0;
     double acc = 0;
-    for (var v in s) {
+    for (final v in s) {
       final d = v / 32768.0;
       acc += d * d;
     }
@@ -112,7 +123,7 @@ class SimpleVadSegmenter {
   }
 }
 
-// --- Orchestrator ---
+/// ---------- Continuous Listener ----------
 class ContinuousListener {
   ContinuousListener({
     required this.stt,
@@ -124,7 +135,10 @@ class ContinuousListener {
 
   final SttEngine stt;
   final SuggestionEngine suggester;
-  final void Function({required String transcript, required List<String> options}) onSuggestions;
+  final void Function({
+    required String transcript,
+    required List<String> options,
+  }) onSuggestions;
   final Map<String, dynamic> patientProfile;
   final int sampleRate;
 
@@ -132,6 +146,7 @@ class ContinuousListener {
   StreamSubscription<Uint8List>? _sub;
   final _seg = SimpleVadSegmenter();
   bool _running = false;
+  Uint8List? _carryByte; // fixes unaligned byte buffer
 
   Future<bool> start() async {
     if (_running) return true;
@@ -147,30 +162,43 @@ class ContinuousListener {
     final stream = await _rec.startStream(cfg);
     _running = true;
 
-    // Debug fallback → show a suggestion after 3s if nothing triggers
-    Future.delayed(const Duration(seconds: 3), () {
-      if (_running) {
-        onSuggestions(
-          transcript: '(debug) water please',
-          options: const ['Water please', 'I need help', 'Call my caregiver'],
-        );
-      }
-    });
-
     _sub = stream.listen((bytes) async {
-      if (bytes.isEmpty) return;
-      final int16 = Int16List.view(bytes.buffer, bytes.offsetInBytes, bytes.lengthInBytes ~/ 2);
-      final seg = _seg.pushFrame(int16);
-      if (seg != null) {
-        final transcript = await stt.transcribeBytes(seg, sampleRate: sampleRate);
-        if (transcript.trim().isEmpty) return;
+      try {
+        if (bytes.isEmpty) return;
 
-        final options = await suggester.suggest(
-          transcript: transcript,
-          patientProfile: patientProfile,
-          recentWords: const [],
-        );
-        onSuggestions(transcript: transcript, options: options);
+        // ensure alignment to 16-bit samples
+        Uint8List chunk;
+        if (_carryByte != null) {
+          chunk = Uint8List(_carryByte!.length + bytes.lengthInBytes)
+            ..setAll(0, _carryByte!)
+            ..setAll(_carryByte!.length, bytes);
+          _carryByte = null;
+        } else {
+          chunk = Uint8List.fromList(bytes);
+        }
+
+        if (chunk.lengthInBytes.isOdd) {
+          _carryByte = Uint8List.fromList([chunk.last]);
+          chunk = chunk.sublist(0, chunk.lengthInBytes - 1);
+        }
+        if (chunk.isEmpty) return;
+
+        final pcm16 = Int16List.view(chunk.buffer, 0, chunk.lengthInBytes >> 1);
+        final seg = _seg.pushFrame(pcm16);
+
+        if (seg != null) {
+          final transcript = await stt.transcribeBytes(seg);
+          if (transcript.trim().isEmpty) return;
+
+          final opts = await suggester.suggest(
+            transcript: transcript,
+            patientProfile: patientProfile,
+            recentWords: const [],
+          );
+          onSuggestions(transcript: transcript, options: opts);
+        }
+      } catch (e, st) {
+        print('Audio stream error: $e\n$st');
       }
     });
 
@@ -182,6 +210,7 @@ class ContinuousListener {
     await _sub?.cancel();
     _sub = null;
     await _rec.stop();
+    _carryByte = null;
     _running = false;
   }
 
