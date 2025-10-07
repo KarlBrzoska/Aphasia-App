@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 /* --------------------------------------------------------------------------
- *  speech_to_text version — continuous live STT + your existing suggester
+ *  speech_to_text version — continuous live STT 
  * -------------------------------------------------------------------------- */
 
 abstract class SuggestionEngine {
